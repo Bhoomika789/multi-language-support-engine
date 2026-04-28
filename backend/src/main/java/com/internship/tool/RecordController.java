@@ -1,5 +1,6 @@
 package com.internship.tool;
 
+import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -7,6 +8,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -17,6 +19,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/records")
@@ -163,4 +168,49 @@ public class RecordController {
 
         return response;
     }
+    // =========================
+@GetMapping("/export")
+public void exportCSV(HttpServletResponse response) throws Exception {
+
+    response.setContentType("text/csv");
+    response.setHeader("Content-Disposition", "attachment; filename=records.csv");
+
+    PrintWriter writer = response.getWriter();
+
+    // Header
+    writer.println("ID,Title,Language");
+
+    // Data
+    for (Map<String, Object> item : list) {
+        writer.println(
+            item.get("id") + "," +
+            item.get("title") + "," +
+            item.get("language")
+        );
+    }
+
+    writer.flush();
+    writer.close();
+}
+// =========================
+// FILE UPLOAD
+// =========================
+@PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+public String uploadFile(@RequestParam("file") MultipartFile file) {
+
+    if (file.isEmpty()) {
+        return "File is empty ❌";
+    }
+
+    if (file.getOriginalFilename() == null || 
+    !file.getOriginalFilename().endsWith(".csv")) {
+    return "Only CSV files allowed ❌";
+}
+
+    if (file.getSize() > 1024 * 1024) {
+        return "File too large ❌";
+    }
+
+    return "File uploaded successfully: " + file.getOriginalFilename();
+}
 }
