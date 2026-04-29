@@ -1,5 +1,6 @@
 package com.internship.tool;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -16,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -25,26 +27,32 @@ import jakarta.servlet.http.HttpServletResponse;
 
 @RestController
 @RequestMapping("/api/records")
-@CrossOrigin
+@CrossOrigin("*")
 public class RecordController {
 
-    private List<Map<String, Object>> list = new ArrayList<>();
+    private final List<Map<String, Object>> list = new ArrayList<>();
     private int idCounter = 1;
+
+    // =========================
+    // 🔐 AUTH VALIDATION
+    // =========================
+    private void validateRequest(String header) {
+        if (header == null || !header.startsWith("Bearer ")) {
+            throw new RuntimeException("Missing token");
+        }
+
+        String token = header.substring(7);
+        JwtUtil.validateToken(token);
+    }
 
     // =========================
     // GET ALL
     // =========================
     @GetMapping
-    public List<Map<String, Object>> getRecords() {
+    public List<Map<String, Object>> getRecords(
+            @RequestHeader("Authorization") String authHeader) {
 
-        if (list.isEmpty()) {
-            Map<String, Object> data = new HashMap<>();
-            data.put("id", idCounter++);
-            data.put("title", "Hello World");
-            data.put("language", "English");
-            list.add(data);
-        }
-
+        validateRequest(authHeader);
         return list;
     }
 
@@ -52,7 +60,11 @@ public class RecordController {
     // ADD
     // =========================
     @PostMapping
-    public Map<String, Object> addRecord(@RequestBody Map<String, Object> newData) {
+    public Map<String, Object> addRecord(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestBody Map<String, Object> newData) {
+
+        validateRequest(authHeader);
 
         newData.put("id", idCounter++);
         list.add(newData);
@@ -64,7 +76,11 @@ public class RecordController {
     // DELETE
     // =========================
     @DeleteMapping("/{id}")
-    public String deleteRecord(@PathVariable int id) {
+    public String deleteRecord(
+            @RequestHeader("Authorization") String authHeader,
+            @PathVariable int id) {
+
+        validateRequest(authHeader);
 
         list.removeIf(item -> (int) item.get("id") == id);
         return "Deleted";
@@ -75,8 +91,11 @@ public class RecordController {
     // =========================
     @PutMapping("/{id}")
     public Map<String, Object> updateRecord(
+            @RequestHeader("Authorization") String authHeader,
             @PathVariable int id,
             @RequestBody Map<String, Object> updatedData) {
+
+        validateRequest(authHeader);
 
         for (Map<String, Object> item : list) {
             if ((int) item.get("id") == id) {
@@ -99,7 +118,6 @@ public class RecordController {
 
         for (Map<String, Object> item : list) {
             String lang = (String) item.get("language");
-
             if (lang != null && lang.equalsIgnoreCase("english")) {
                 english++;
             }
@@ -122,7 +140,6 @@ public class RecordController {
 
         for (Map<String, Object> item : list) {
             String title = (String) item.get("title");
-
             if (title != null && title.toLowerCase().contains(q.toLowerCase())) {
                 result.add(item);
             }
@@ -141,7 +158,6 @@ public class RecordController {
 
         for (Map<String, Object> item : list) {
             String language = (String) item.get("language");
-
             if (language != null && language.equalsIgnoreCase(lang)) {
                 result.add(item);
             }
@@ -151,66 +167,85 @@ public class RecordController {
     }
 
     // =========================
-    // 🤖 AI (Day 8)
+    // AI
     // =========================
     @PostMapping("/ai/describe")
     public Map<String, Object> generateAI(@RequestBody Map<String, String> input) {
 
-        String title = input.get("title");
-        String language = input.get("language");
+        String title = input.getOrDefault("title", "Unknown");
+        String language = input.getOrDefault("language", "English");
 
         Map<String, Object> response = new HashMap<>();
-       response.put("description",
-    "This content titled '" + title + "' is written in " +
-    language.substring(0,1).toUpperCase() + language.substring(1).toLowerCase() +
-    ". It is processed using AI to enhance multilingual understanding.");
+        response.put("description",
+                "This content titled '" + title + "' is written in " +
+                        language.substring(0, 1).toUpperCase() + language.substring(1).toLowerCase() +
+                        ". It is processed using AI to enhance multilingual understanding.");
+
         response.put("generated_at", LocalDateTime.now());
 
         return response;
     }
+
     // =========================
-@GetMapping("/export")
-public void exportCSV(HttpServletResponse response) throws Exception {
+    // CSV EXPORT (FINAL FIXED)
+    // =========================
+    @GetMapping("/export")
+    public void exportCSV(
+            @RequestHeader(value = "Authorization", required = false) String authHeader,
+            @RequestParam(value = "token", required = false) String token,
+            HttpServletResponse response) throws IOException {
 
-    response.setContentType("text/csv");
-    response.setHeader("Content-Disposition", "attachment; filename=records.csv");
+        // 🔐 Validate token
+        String jwtToken = null;
 
-    PrintWriter writer = response.getWriter();
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            jwtToken = authHeader.substring(7);
+        } else if (token != null) {
+            jwtToken = token;
+        }
 
-    // Header
-    writer.println("ID,Title,Language");
+        if (jwtToken == null) {
+            throw new RuntimeException("Token missing");
+        }
 
-    // Data
-    for (Map<String, Object> item : list) {
-        writer.println(
-            item.get("id") + "," +
-            item.get("title") + "," +
-            item.get("language")
-        );
+        JwtUtil.validateToken(jwtToken);
+
+        // 📁 Headers
+        response.setContentType("text/csv");
+        response.setHeader("Content-Disposition", "attachment; filename=records.csv");
+
+        PrintWriter writer = response.getWriter();
+
+        // Header row
+        writer.println("ID,Title,Language");
+
+        // Data rows
+        for (Map<String, Object> record : list) {
+            writer.println(
+                    record.get("id") + "," +
+                    record.get("title") + "," +
+                    record.get("language")
+            );
+        }
+
+        writer.flush();
+        writer.close();
     }
 
-    writer.flush();
-    writer.close();
-}
-// =========================
-// FILE UPLOAD
-// =========================
-@PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-public String uploadFile(@RequestParam("file") MultipartFile file) {
+    // =========================
+    // FILE UPLOAD
+    // =========================
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public String uploadFile(
+            @RequestHeader("Authorization") String authHeader,
+            @RequestParam("file") MultipartFile file) {
 
-    if (file.isEmpty()) {
-        return "File is empty ❌";
+        validateRequest(authHeader);
+
+        if (file.isEmpty()) return "File is empty ❌";
+        if (!file.getOriginalFilename().endsWith(".csv")) return "Only CSV allowed ❌";
+        if (file.getSize() > 1024 * 1024) return "File too large ❌";
+
+        return "File uploaded successfully: " + file.getOriginalFilename();
     }
-
-    if (file.getOriginalFilename() == null || 
-    !file.getOriginalFilename().endsWith(".csv")) {
-    return "Only CSV files allowed ❌";
-}
-
-    if (file.getSize() > 1024 * 1024) {
-        return "File too large ❌";
-    }
-
-    return "File uploaded successfully: " + file.getOriginalFilename();
-}
 }

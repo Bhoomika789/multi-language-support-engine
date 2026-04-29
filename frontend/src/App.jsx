@@ -4,6 +4,12 @@ import "./index.css";
 
 function App() {
 
+  // 🔐 AUTH
+  const [token, setToken] = useState(localStorage.getItem("token"));
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  // DATA
   const [data, setData] = useState([]);
   const [stats, setStats] = useState({ total: 0, english: 0 });
 
@@ -12,43 +18,89 @@ function App() {
   const [editId, setEditId] = useState(null);
 
   const [search, setSearch] = useState("");
-
   const [aiResponse, setAiResponse] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  const [file, setFile] = useState(null);
 
   const API = "http://localhost:8080/api/records";
 
   // ======================
-  // FETCH
+  // 🔐 LOGIN
+  // ======================
+  const handleLogin = () => {
+    fetch("http://localhost:8080/api/auth/login", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          localStorage.setItem("token", data.token);
+          setToken(data.token);
+        } else {
+          alert("Invalid credentials ❌");
+        }
+      })
+      .catch(() => alert("Login failed ❌"));
+  };
+
+  // ======================
+  // 🔐 LOGOUT
+  // ======================
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    setToken(null);
+  };
+
+  // ======================
+  // 📥 FETCH DATA
   // ======================
   const fetchData = () => {
-    fetch(API)
+    fetch(API, {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    })
       .then(res => res.json())
       .then(setData);
   };
 
   const fetchStats = () => {
-    fetch(`${API}/stats`)
+    fetch(`${API}/stats`, {
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    })
       .then(res => res.json())
       .then(setStats);
   };
 
   useEffect(() => {
-    fetchData();
-    fetchStats();
-  }, []);
+    if (token) {
+      fetchData();
+      fetchStats();
+    }
+  }, [token]);
 
   // ======================
-  // SEARCH (Debounce)
+  // 🔍 SEARCH
   // ======================
   useEffect(() => {
     const delay = setTimeout(() => {
-      if (search.trim().length < 2) {
+      if (!search) {
         fetchData();
         return;
       }
 
-      fetch(`${API}/search?q=${search}`)
+      fetch(`${API}/search?q=${search}`, {
+        headers: {
+          Authorization: "Bearer " + token
+        }
+      })
         .then(res => res.json())
         .then(setData);
 
@@ -58,42 +110,55 @@ function App() {
   }, [search]);
 
   // ======================
-  // CRUD
+  // ➕ ADD
   // ======================
   const handleAdd = () => {
     fetch(API, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
       body: JSON.stringify({ title, language })
     }).then(() => {
       fetchData();
       fetchStats();
       setTitle("");
       setLanguage("");
-      setAiResponse(null);   // ✅ clear AI
     });
   };
 
+  // ======================
+  // ❌ DELETE
+  // ======================
   const handleDelete = (id) => {
-    fetch(`${API}/${id}`, { method: "DELETE" })
-      .then(() => {
-        fetchData();
-        fetchStats();
-        setAiResponse(null); // optional cleanup
-      });
+    fetch(`${API}/${id}`, {
+      method: "DELETE",
+      headers: {
+        Authorization: "Bearer " + token
+      }
+    }).then(() => {
+      fetchData();
+      fetchStats();
+    });
   };
 
+  // ======================
+  // ✏️ EDIT
+  // ======================
   const handleEdit = (item) => {
     setEditId(item.id);
     setTitle(item.title);
     setLanguage(item.language);
-    setAiResponse(null); // clear AI on edit
   };
 
   const handleUpdate = () => {
     fetch(`${API}/${editId}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer " + token
+      },
       body: JSON.stringify({ title, language })
     }).then(() => {
       setEditId(null);
@@ -101,7 +166,6 @@ function App() {
       setLanguage("");
       fetchData();
       fetchStats();
-      setAiResponse(null);   // ✅ clear AI
     });
   };
 
@@ -110,29 +174,68 @@ function App() {
   // ======================
   const handleAI = async () => {
     setLoading(true);
-    setAiResponse(null);
 
+    const res = await fetch(`${API}/ai/describe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title, language })
+    });
+
+    const data = await res.json();
+    setAiResponse(data);
+    setLoading(false);
+  };
+
+  // ======================
+  // 📂 UPLOAD
+  // ======================
+  const handleUpload = async () => {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API}/upload`, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + token
+      },
+      body: formData
+    });
+
+    alert(await res.text());
+    fetchData();
+  };
+
+  // ======================
+  // 📥 EXPORT (FIXED)
+  // ======================
+  const handleExport = async () => {
     try {
-      const res = await fetch(`${API}/ai/describe`, {
-        method: "POST",
+      const response = await fetch(`${API}/export`, {
         headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          title,
-          language
-        })
+          Authorization: `Bearer ${token}`
+        }
       });
 
-      const data = await res.json();
-      setAiResponse(data);
+      if (!response.ok) {
+        alert("Export failed ❌");
+        return;
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "records.csv";
+      document.body.appendChild(a);
+      a.click();
+
+      a.remove();
+      window.URL.revokeObjectURL(url);
 
     } catch (err) {
-      console.error("AI ERROR:", err);
-      alert("AI failed ❌");
+      alert("Error ❌");
     }
-
-    setLoading(false);
   };
 
   const chartData = [
@@ -140,13 +243,31 @@ function App() {
     { name: "English", value: stats.english }
   ];
 
+  // ======================
+  // 🔐 LOGIN UI
+  // ======================
+  if (!token) {
+    return (
+      <div style={{ textAlign: "center", marginTop: "100px" }}>
+        <h2>🔐 Login</h2>
+        <input placeholder="Username" onChange={e => setUsername(e.target.value)} />
+        <br />
+        <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} />
+        <br />
+        <button onClick={handleLogin}>Login</button>
+      </div>
+    );
+  }
+
+  // ======================
+  // MAIN UI
+  // ======================
   return (
     <div className="container">
 
-      <h1>Multi-Language Support Engine</h1>
-      <h2>Day 8 — AI Panel 🚀</h2>
+      <h1>🌍 Multi-Language Engine</h1>
+      <button onClick={handleLogout}>Logout</button>
 
-      {/* KPI */}
       <div className="cards">
         <div className="card">
           <h3>Total</h3>
@@ -158,7 +279,6 @@ function App() {
         </div>
       </div>
 
-      {/* Chart */}
       <BarChart width={400} height={300} data={chartData}>
         <XAxis dataKey="name" />
         <YAxis />
@@ -166,77 +286,41 @@ function App() {
         <Bar dataKey="value" fill="#4F46E5" />
       </BarChart>
 
-      {/* SEARCH */}
       <input
         placeholder="Search..."
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      {/* FILTER */}
-      <select onChange={(e) => {
-        const lang = e.target.value;
-        if (!lang) fetchData();
-        else {
-          fetch(`${API}/filter?lang=${lang}`)
-            .then(res => res.json())
-            .then(setData);
-        }
-      }}>
-        <option value="">All</option>
-        <option value="English">English</option>
-        <option value="Spanish">Spanish</option>
-      </select>
-
-      {/* FORM */}
       <div className="form">
-        <input
-          placeholder="Title"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <input
-          placeholder="Language"
-          value={language}
-          onChange={(e) => setLanguage(e.target.value)}
-        />
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+        <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="Language" />
 
         <button onClick={editId ? handleUpdate : handleAdd}>
           {editId ? "Update" : "Add"}
         </button>
 
-        {/* ✅ Disabled AI Button */}
-        <button
-          onClick={handleAI}
-          disabled={!title || !language || loading}
-        >
-          {loading ? "Generating..." : "Generate AI"}
+        <button onClick={handleAI} disabled={!title || !language || loading}>
+          {loading ? "Generating..." : "AI"}
         </button>
       </div>
 
-      {/* AI PANEL */}
-      {loading && <p>⏳ Generating AI...</p>}
-
       {aiResponse && (
         <div className="card">
-          <h3>AI Output</h3>
           <p>{aiResponse.description}</p>
-          <small>{aiResponse.generated_at}</small>
         </div>
       )}
 
-      <hr />
+      <h3>Upload CSV</h3>
+      <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+      <button onClick={handleUpload}>Upload</button>
 
-      {/* LIST */}
+      <h3>Export</h3>
+      <button onClick={handleExport}>Download CSV</button>
+
       {data.map(item => (
-        <div key={item.id} className="list-item">
-          <p>
-            {item.title} - {
-              item.language?.charAt(0).toUpperCase() +
-              item.language?.slice(1)
-            }
-          </p>
-
+        <div key={item.id}>
+          {item.title} - {item.language}
           <button onClick={() => handleEdit(item)}>Edit</button>
           <button onClick={() => handleDelete(item.id)}>Delete</button>
         </div>
