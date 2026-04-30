@@ -2,14 +2,11 @@ package com.internship.tool;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
-import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,9 +16,7 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import jakarta.servlet.http.HttpServletResponse;
 
@@ -30,222 +25,104 @@ import jakarta.servlet.http.HttpServletResponse;
 @CrossOrigin("*")
 public class RecordController {
 
-    private final List<Map<String, Object>> list = new ArrayList<>();
-    private int idCounter = 1;
+    private final RecordRepository repo;
 
-    // =========================
-    // 🔐 AUTH VALIDATION
-    // =========================
+    public RecordController(RecordRepository repo) {
+        this.repo = repo;
+    }
+
+    // AUTH
     private void validateRequest(String header) {
         if (header == null || !header.startsWith("Bearer ")) {
             throw new RuntimeException("Missing token");
         }
-
         String token = header.substring(7);
         JwtUtil.validateToken(token);
     }
 
-    // =========================
     // GET ALL
-    // =========================
     @GetMapping
-    public List<Map<String, Object>> getRecords(
-            @RequestHeader("Authorization") String authHeader) {
-
+    public List<Record> getRecords(@RequestHeader("Authorization") String authHeader) {
         validateRequest(authHeader);
-        return list;
+        return repo.findAll();
     }
 
-    // =========================
     // ADD
-    // =========================
     @PostMapping
-    public Map<String, Object> addRecord(
+    public Record addRecord(
             @RequestHeader("Authorization") String authHeader,
-            @RequestBody Map<String, Object> newData) {
+            @RequestBody Record record) {
 
         validateRequest(authHeader);
-
-        newData.put("id", idCounter++);
-        list.add(newData);
-
-        return newData;
+        return repo.save(record);
     }
 
-    // =========================
     // DELETE
-    // =========================
     @DeleteMapping("/{id}")
     public String deleteRecord(
             @RequestHeader("Authorization") String authHeader,
-            @PathVariable int id) {
+            @PathVariable Long id) {
 
         validateRequest(authHeader);
-
-        list.removeIf(item -> (int) item.get("id") == id);
+        repo.deleteById(id);
         return "Deleted";
     }
 
-    // =========================
     // UPDATE
-    // =========================
     @PutMapping("/{id}")
-    public Map<String, Object> updateRecord(
+    public Record updateRecord(
             @RequestHeader("Authorization") String authHeader,
-            @PathVariable int id,
-            @RequestBody Map<String, Object> updatedData) {
+            @PathVariable Long id,
+            @RequestBody Record updated) {
 
         validateRequest(authHeader);
 
-        for (Map<String, Object> item : list) {
-            if ((int) item.get("id") == id) {
-                item.put("title", updatedData.get("title"));
-                item.put("language", updatedData.get("language"));
-                return item;
-            }
-        }
-        return Collections.emptyMap();
+        return repo.findById(id).map(r -> {
+            r.setTitle(updated.getTitle());
+            r.setLanguage(updated.getLanguage());
+            return repo.save(r);
+        }).orElseThrow(() -> new RuntimeException("Record not found"));
     }
 
-    // =========================
-    // STATS
-    // =========================
+    // 📊 STATS
     @GetMapping("/stats")
-    public Map<String, Integer> getStats() {
+    public List<Map<String, Object>> getStats() {
+        List<Record> records = repo.findAll();
 
-        int total = list.size();
-        int english = 0;
+        Map<String, Long> counts = records.stream()
+            .collect(Collectors.groupingBy(
+                r -> r.getLanguage().toLowerCase(),
+                Collectors.counting()
+            ));
 
-        for (Map<String, Object> item : list) {
-            String lang = (String) item.get("language");
-            if (lang != null && lang.equalsIgnoreCase("english")) {
-                english++;
-            }
-        }
-
-        Map<String, Integer> stats = new HashMap<>();
-        stats.put("total", total);
-        stats.put("english", english);
-
-        return stats;
+        return counts.entrySet().stream()
+            .map(e -> {
+                Map<String, Object> m = new HashMap<>();
+                m.put("language", e.getKey());
+                m.put("count", e.getValue());
+                return m;
+            })
+            .toList();
     }
 
-    // =========================
-    // SEARCH
-    // =========================
-    @GetMapping("/search")
-    public List<Map<String, Object>> searchRecords(@RequestParam String q) {
-
-        List<Map<String, Object>> result = new ArrayList<>();
-
-        for (Map<String, Object> item : list) {
-            String title = (String) item.get("title");
-            if (title != null && title.toLowerCase().contains(q.toLowerCase())) {
-                result.add(item);
-            }
-        }
-
-        return result;
-    }
-
-    // =========================
-    // FILTER
-    // =========================
-    @GetMapping("/filter")
-    public List<Map<String, Object>> filterByLanguage(@RequestParam String lang) {
-
-        List<Map<String, Object>> result = new ArrayList<>();
-
-        for (Map<String, Object> item : list) {
-            String language = (String) item.get("language");
-            if (language != null && language.equalsIgnoreCase(lang)) {
-                result.add(item);
-            }
-        }
-
-        return result;
-    }
-
-    // =========================
-    // AI
-    // =========================
-    @PostMapping("/ai/describe")
-    public Map<String, Object> generateAI(@RequestBody Map<String, String> input) {
-
-        String title = input.getOrDefault("title", "Unknown");
-        String language = input.getOrDefault("language", "English");
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("description",
-                "This content titled '" + title + "' is written in " +
-                        language.substring(0, 1).toUpperCase() + language.substring(1).toLowerCase() +
-                        ". It is processed using AI to enhance multilingual understanding.");
-
-        response.put("generated_at", LocalDateTime.now());
-
-        return response;
-    }
-
-    // =========================
-    // CSV EXPORT (FINAL FIXED)
-    // =========================
+    // EXPORT CSV
     @GetMapping("/export")
     public void exportCSV(
-            @RequestHeader(value = "Authorization", required = false) String authHeader,
-            @RequestParam(value = "token", required = false) String token,
+            @RequestHeader("Authorization") String authHeader,
             HttpServletResponse response) throws IOException {
 
-        // 🔐 Validate token
-        String jwtToken = null;
+        validateRequest(authHeader);
 
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            jwtToken = authHeader.substring(7);
-        } else if (token != null) {
-            jwtToken = token;
-        }
-
-        if (jwtToken == null) {
-            throw new RuntimeException("Token missing");
-        }
-
-        JwtUtil.validateToken(jwtToken);
-
-        // 📁 Headers
         response.setContentType("text/csv");
         response.setHeader("Content-Disposition", "attachment; filename=records.csv");
 
         PrintWriter writer = response.getWriter();
-
-        // Header row
         writer.println("ID,Title,Language");
 
-        // Data rows
-        for (Map<String, Object> record : list) {
-            writer.println(
-                    record.get("id") + "," +
-                    record.get("title") + "," +
-                    record.get("language")
-            );
+        for (Record r : repo.findAll()) {
+            writer.println(r.getId() + "," + r.getTitle() + "," + r.getLanguage());
         }
 
-        writer.flush();
         writer.close();
-    }
-
-    // =========================
-    // FILE UPLOAD
-    // =========================
-    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public String uploadFile(
-            @RequestHeader("Authorization") String authHeader,
-            @RequestParam("file") MultipartFile file) {
-
-        validateRequest(authHeader);
-
-        if (file.isEmpty()) return "File is empty ❌";
-        if (!file.getOriginalFilename().endsWith(".csv")) return "Only CSV allowed ❌";
-        if (file.getSize() > 1024 * 1024) return "File too large ❌";
-
-        return "File uploaded successfully: " + file.getOriginalFilename();
     }
 }
