@@ -1,12 +1,16 @@
-/* ===== Base ===== */
+/* ===== RESET ===== */
+* {
+  box-sizing: border-box;
+}
+
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f9fafb;
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f8fafc;
   color: #111;
 }
 
-/* ===== Layout ===== */
+/* ===== LAYOUT ===== */
 .container {
   max-width: 1200px;
   margin: auto;
@@ -14,46 +18,66 @@ body {
   text-align: center;
 }
 
-/* ===== Headings ===== */
+/* ===== HEADINGS ===== */
 h1 {
   margin-bottom: 10px;
+  font-weight: 600;
 }
 
 h2 {
   margin-top: 20px;
+  font-weight: 500;
 }
 
-/* ===== Buttons ===== */
+/* ===== BUTTONS ===== */
 .top-buttons {
   display: flex;
   justify-content: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 15px;
+  margin-bottom: 20px;
 }
 
 button {
-  padding: 10px 14px;
-  border-radius: 6px;
+  padding: 10px 16px;
+  border-radius: 8px;
   border: none;
   background: #4F46E5;
   color: white;
   cursor: pointer;
+  transition: all 0.25s ease;
+  font-weight: 500;
 }
 
 button:hover {
-  background: #3730a3;
+  background: #4338ca;
+  transform: translateY(-2px);
 }
 
-/* ===== Chart ===== */
+/* ===== CARD ===== */
+.card {
+  background: white;
+  padding: 20px;
+  border-radius: 14px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.08);
+  margin: 20px auto;
+  max-width: 1000px;
+  transition: 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+}
+
+/* ===== CHART ===== */
 .chart-box {
   width: 100%;
   max-width: 900px;
   height: 300px;
-  margin: 20px auto;
+  margin: auto;
 }
 
-/* ===== Form ===== */
+/* ===== FORM ===== */
 .form {
   display: flex;
   flex-wrap: wrap;
@@ -67,9 +91,16 @@ input {
   border-radius: 6px;
   border: 1px solid #ccc;
   min-width: 180px;
+  transition: 0.2s;
 }
 
-/* ===== List ===== */
+input:focus {
+  outline: none;
+  border-color: #4F46E5;
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+}
+
+/* ===== LIST ===== */
 .list-item {
   display: flex;
   justify-content: space-between;
@@ -79,7 +110,7 @@ input {
   margin: 10px auto;
   padding: 12px;
 
-  border-bottom: 1px solid #ddd;
+  border-bottom: 1px solid #eee;
 }
 
 .list-item span {
@@ -90,6 +121,19 @@ input {
 .btn-group {
   display: flex;
   gap: 8px;
+}
+
+/* ===== EMPTY STATE ===== */
+.list-empty {
+  color: #666;
+  padding: 20px;
+}
+
+/* ===== LOADING ===== */
+.loading {
+  text-align: center;
+  font-weight: 500;
+  margin: 10px 0;
 }
 
 /* ===== MOBILE (≤ 768px) ===== */
@@ -154,10 +198,6 @@ input {
 
   .chart-box {
     height: 280px;
-  }
-
-  .container {
-    padding: 20px;
   }
 }
 

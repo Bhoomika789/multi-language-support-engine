@@ -4,6 +4,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recha
 import "./index.css";
 import Dashboard from "./pages/Dashboard";
 
+const BASE_URL = "http://localhost:8080/api";
+
 function MainApp() {
   const navigate = useNavigate();
 
@@ -19,24 +21,29 @@ function MainApp() {
   const [editId, setEditId] = useState(null);
 
   const [file, setFile] = useState(null);
+  const [loading, setLoading] = useState(false);
 
-  const API = "http://localhost:8080/api/records";
+  const API = `${BASE_URL}/records`;
 
-  // ================= LOGIN =================
+  // ===== LOGIN =====
   const handleLogin = async () => {
-    const res = await fetch("http://localhost:8080/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
-    });
+    try {
+      const res = await fetch(`${BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+      });
 
-    const data = await res.json();
+      const result = await res.json();
 
-    if (data.token) {
-      localStorage.setItem("token", data.token);
-      setToken(data.token);
-    } else {
-      alert("Invalid credentials ❌");
+      if (result.token) {
+        localStorage.setItem("token", result.token);
+        setToken(result.token);
+      } else {
+        alert("Invalid credentials");
+      }
+    } catch {
+      alert("Login failed");
     }
   };
 
@@ -45,45 +52,38 @@ function MainApp() {
     setToken(null);
   };
 
-  // ================= FETCH =================
-  const fetchData = async () => {
-    const res = await fetch(API, {
-      headers: { Authorization: "Bearer " + token }
-    });
-    const result = await res.json();
-    setData(result);
-  };
+  // ===== FETCH =====
+  const fetchAll = async () => {
+    try {
+      setLoading(true);
 
-  const fetchStats = async () => {
-    const res = await fetch(`${API}/stats`, {
-      headers: { Authorization: "Bearer " + token }
-    });
+      const res = await fetch(API, {
+        headers: { Authorization: "Bearer " + token }
+      });
 
-    const statsData = await res.json();
+      const result = await res.json();
+      setData(result);
 
-    let total = 0;
-    let english = 0;
+      // stats
+      const total = result.length;
+      const english = result.filter(r => r.language?.toLowerCase() === "english").length;
 
-    statsData.forEach(item => {
-      total += item.count;
-      if (item.language.toLowerCase() === "english") {
-        english += item.count;
-      }
-    });
+      setStats({ total, english });
 
-    setStats({ total, english });
+    } catch {
+      alert("Error loading data");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (token) {
-      fetchData();
-      fetchStats();
-    }
+    if (token) fetchAll();
   }, [token]);
 
-  // ================= CRUD =================
+  // ===== CRUD =====
   const handleAdd = async () => {
-    if (!title || !language) return alert("Fill all fields");
+    if (!title.trim() || !language.trim()) return alert("Fill all fields");
 
     await fetch(API, {
       method: "POST",
@@ -93,14 +93,13 @@ function MainApp() {
       },
       body: JSON.stringify({
         title,
-        language: language.toLowerCase()   // 🔥 FIX: normalize
+        language: language.toLowerCase()
       })
     });
 
     setTitle("");
     setLanguage("");
-    fetchData();
-    fetchStats();
+    fetchAll();
   };
 
   const handleDelete = async (id) => {
@@ -109,8 +108,7 @@ function MainApp() {
       headers: { Authorization: "Bearer " + token }
     });
 
-    fetchData();
-    fetchStats();
+    fetchAll();
   };
 
   const handleEdit = (item) => {
@@ -128,18 +126,17 @@ function MainApp() {
       },
       body: JSON.stringify({
         title,
-        language: language.toLowerCase()   // 🔥 FIX
+        language: language.toLowerCase()
       })
     });
 
     setEditId(null);
     setTitle("");
     setLanguage("");
-    fetchData();
-    fetchStats();
+    fetchAll();
   };
 
-  // ================= FILE =================
+  // ===== FILE =====
   const handleUpload = async () => {
     if (!file) return alert("Select file");
 
@@ -152,8 +149,7 @@ function MainApp() {
       body: formData
     });
 
-    fetchData();
-    fetchStats();
+    fetchAll();
   };
 
   const handleExport = async () => {
@@ -170,17 +166,16 @@ function MainApp() {
     a.click();
   };
 
-  // ================= CHART =================
   const chartData = [
     { name: "Total", value: stats.total },
     { name: "English", value: stats.english }
   ];
 
-  // ================= LOGIN UI =================
+  // ===== LOGIN UI =====
   if (!token) {
     return (
       <div className="center-box">
-        <h2>🔐 Login</h2>
+        <h2>Login</h2>
         <input placeholder="Username" onChange={e => setUsername(e.target.value)} />
         <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} />
         <button onClick={handleLogin}>Login</button>
@@ -188,58 +183,69 @@ function MainApp() {
     );
   }
 
+  // ===== MAIN UI =====
   return (
     <div className="container">
 
-      <h1>🌍 Multi-Language Engine</h1>
+      <h1>Multi-Language Engine</h1>
 
       <div className="top-buttons">
-        <button onClick={() => navigate("/dashboard")}>📊 Dashboard</button>
+        <button onClick={() => navigate("/dashboard")}>Dashboard</button>
         <button onClick={handleLogout}>Logout</button>
       </div>
 
-      <h3>Total: {stats.total}</h3>
-      <h3>English: {stats.english}</h3>
+      {loading && <p className="loading">Loading...</p>}
 
-      {/* CHART */}
-      <div className="chart-box">
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={chartData}>
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="value" fill="#4F46E5" />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
+      <div className="card">
+        <h3>Total: {stats.total}</h3>
+        <h3>English: {stats.english}</h3>
 
-      {/* FORM */}
-      <div className="form">
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
-        <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="Language" />
-        <button onClick={editId ? handleUpdate : handleAdd}>
-          {editId ? "Update" : "Add"}
-        </button>
-      </div>
-
-      {/* FILE */}
-      <div className="form">
-        <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-        <button onClick={handleUpload}>Upload</button>
-        <button onClick={handleExport}>Download CSV</button>
-      </div>
-
-      {/* DATA */}
-      {data.map(item => (
-        <div key={item.id} className="list-item">
-          <span>{item.title} - {item.language}</span>
-
-          <div>
-            <button onClick={() => handleEdit(item)}>Edit</button>
-            <button onClick={() => handleDelete(item.id)}>Delete</button>
-          </div>
+        <div className="chart-box">
+          <ResponsiveContainer width="100%" height={300}>
+            <BarChart data={chartData}>
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip />
+              <Bar dataKey="value" fill="#4F46E5" />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
-      ))}
+      </div>
+
+      <div className="card">
+        <div className="form">
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+          <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="Language" />
+          <button onClick={editId ? handleUpdate : handleAdd}>
+            {editId ? "Update" : "Add"}
+          </button>
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="form">
+          <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+          <button onClick={handleUpload}>Upload</button>
+          <button onClick={handleExport}>Download CSV</button>
+        </div>
+      </div>
+
+      <div className="card">
+        {data.length === 0 ? (
+          <p className="list-empty">No records found</p>
+        ) : (
+          data.map(item => (
+            <div key={item.id} className="list-item">
+              <span>{item.title} - {item.language}</span>
+
+              <div className="btn-group">
+                <button onClick={() => handleEdit(item)}>Edit</button>
+                <button onClick={() => handleDelete(item.id)}>Delete</button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
 
     </div>
   );

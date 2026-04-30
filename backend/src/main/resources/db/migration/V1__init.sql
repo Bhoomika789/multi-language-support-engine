@@ -1,4 +1,5 @@
-CREATE TABLE records (
+-- Create table
+CREATE TABLE IF NOT EXISTS records (
     id SERIAL PRIMARY KEY,
     title VARCHAR(255) NOT NULL,
     description TEXT,
@@ -9,5 +10,9 @@ CREATE TABLE records (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_language ON records(language);
-CREATE INDEX idx_status ON records(status);
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_records_language
+ON records(language);
+
+CREATE INDEX IF NOT EXISTS idx_records_status
+ON records(status);

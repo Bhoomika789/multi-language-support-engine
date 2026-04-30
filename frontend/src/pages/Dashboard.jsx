@@ -10,56 +10,114 @@ import {
   CartesianGrid
 } from "recharts";
 
+const API = "http://localhost:8080/api/records/stats";
+
 function Dashboard() {
   const [data, setData] = useState([]);
+  const [summary, setSummary] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    axios.get("http://localhost:8080/api/records/stats")
-      .then(res => {
+    const fetchStats = async () => {
+      try {
+        setLoading(true);
 
-        // Merge duplicate languages
+        const res = await axios.get(API);
+
         const merged = {};
+        let total = 0;
+        let english = 0;
 
         res.data.forEach(item => {
-          const lang = item.language.trim().toLowerCase();
+          const lang = item.language?.trim().toLowerCase();
+          const count = item.count || 0;
 
-          if (merged[lang]) {
-            merged[lang] += item.count;
-          } else {
-            merged[lang] = item.count;
+          total += count;
+
+          if (lang === "english") {
+            english += count;
           }
+
+          merged[lang] = (merged[lang] || 0) + count;
         });
 
-        // Convert to chart format
-        const finalData = Object.keys(merged).map(key => ({
-          language: key,
-          count: merged[key]
-        }));
+        // Summary
+        setSummary([
+          { name: "Total", value: total },
+          { name: "English", value: english }
+        ]);
+
+        // Language distribution
+        const finalData = Object.keys(merged)
+          .map(key => ({
+            language: key,
+            count: merged[key]
+          }))
+          .sort((a, b) => b.count - a.count);
 
         setData(finalData);
-      })
-      .catch(err => console.error(err));
+
+      } catch {
+        alert("Failed to load stats");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
   }, []);
 
   return (
     <div className="container">
-      <h2>📊 Language Distribution</h2>
 
-      <div className="chart-box">
-        {data.length === 0 ? (
-          <p>No data available</p>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data}>
+      <h1>Analytics Dashboard</h1>
+
+      {loading && <p className="loading">Loading...</p>}
+
+      {/* ===== SUMMARY ===== */}
+      <div className="card">
+        <h2>Summary</h2>
+        <div className="chart-box">
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={summary}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="language" />
+              <XAxis dataKey="name" />
               <YAxis />
               <Tooltip />
-              <Bar dataKey="count" fill="#4F46E5" />
+              <Bar dataKey="value" fill="#4F46E5" />
             </BarChart>
           </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* ===== LANGUAGE DISTRIBUTION ===== */}
+      <div className="card">
+        <h2>Language Distribution</h2>
+
+        {data.length === 0 ? (
+          <p className="list-empty">No data available</p>
+        ) : (
+          <div className="chart-box">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" />
+
+                <XAxis
+                  dataKey="language"
+                  interval={0}
+                  angle={-30}
+                  textAnchor="end"
+                />
+
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#6366F1" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         )}
       </div>
+
     </div>
   );
 }

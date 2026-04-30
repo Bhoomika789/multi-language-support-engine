@@ -1,15 +1,20 @@
 package com.internship.tool;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
 
 @Entity
+@Table(name = "records")
 public class Record {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    @NotBlank(message = "Title is required")
     private String title;
+
+    @NotBlank(message = "Language is required")
     private String language;
 
     public Record() {}
@@ -19,7 +24,7 @@ public class Record {
         this.language = language;
     }
 
-    // ✅ GETTERS & SETTERS
+    // GETTERS & SETTERS
 
     public Long getId() {
         return id;

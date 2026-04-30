@@ -2,15 +2,21 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/multilang_db
     username: postgres
-    password: postgres
+    password: postgres  # ⚠️ replace with env variable in real apps
 
   jpa:
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false   # cleaner logs
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   flyway:
     enabled: true
+
+# Logging (clean output)
+logging:
+  level:
+    org.hibernate.SQL: warn
+    org.springframework: info
