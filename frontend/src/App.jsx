@@ -23,19 +23,21 @@ function MainApp() {
   const API = "http://localhost:8080/api/records";
 
   // ================= LOGIN =================
-  const handleLogin = () => {
-    fetch("http://localhost:8080/api/auth/login", {
+  const handleLogin = async () => {
+    const res = await fetch("http://localhost:8080/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password })
-    })
-      .then(res => res.json())
-      .then(data => {
-        if (data.token) {
-          localStorage.setItem("token", data.token);
-          setToken(data.token);
-        } else alert("Invalid credentials ❌");
-      });
+    });
+
+    const data = await res.json();
+
+    if (data.token) {
+      localStorage.setItem("token", data.token);
+      setToken(data.token);
+    } else {
+      alert("Invalid credentials ❌");
+    }
   };
 
   const handleLogout = () => {
@@ -44,37 +46,32 @@ function MainApp() {
   };
 
   // ================= FETCH =================
-  const fetchData = () => {
-    fetch(API, {
+  const fetchData = async () => {
+    const res = await fetch(API, {
       headers: { Authorization: "Bearer " + token }
-    })
-      .then(res => res.json())
-      .then(setData)
-      .catch(console.error);
+    });
+    const result = await res.json();
+    setData(result);
   };
 
-  const fetchStats = () => {
-    fetch(`${API}/stats`, {
+  const fetchStats = async () => {
+    const res = await fetch(`${API}/stats`, {
       headers: { Authorization: "Bearer " + token }
-    })
-      .then(res => res.json())
-      .then(data => {
-        let total = 0;
-        let english = 0;
+    });
 
-        data.forEach(item => {
-          total += item.count;
+    const statsData = await res.json();
 
-          if (item.language.toLowerCase() === "english") {
-            english += item.count;
-          }
-        });
+    let total = 0;
+    let english = 0;
 
-        console.log("STATS 👉", total, english);
+    statsData.forEach(item => {
+      total += item.count;
+      if (item.language.toLowerCase() === "english") {
+        english += item.count;
+      }
+    });
 
-        setStats({ total, english });
-      })
-      .catch(console.error);
+    setStats({ total, english });
   };
 
   useEffect(() => {
@@ -85,30 +82,35 @@ function MainApp() {
   }, [token]);
 
   // ================= CRUD =================
-  const handleAdd = () => {
-    fetch(API, {
+  const handleAdd = async () => {
+    if (!title || !language) return alert("Fill all fields");
+
+    await fetch(API, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + token
       },
-      body: JSON.stringify({ title, language })
-    }).then(() => {
-      fetchData();
-      fetchStats();
-      setTitle("");
-      setLanguage("");
+      body: JSON.stringify({
+        title,
+        language: language.toLowerCase()   // 🔥 FIX: normalize
+      })
     });
+
+    setTitle("");
+    setLanguage("");
+    fetchData();
+    fetchStats();
   };
 
-  const handleDelete = (id) => {
-    fetch(`${API}/${id}`, {
+  const handleDelete = async (id) => {
+    await fetch(`${API}/${id}`, {
       method: "DELETE",
       headers: { Authorization: "Bearer " + token }
-    }).then(() => {
-      fetchData();
-      fetchStats();
     });
+
+    fetchData();
+    fetchStats();
   };
 
   const handleEdit = (item) => {
@@ -117,25 +119,30 @@ function MainApp() {
     setLanguage(item.language);
   };
 
-  const handleUpdate = () => {
-    fetch(`${API}/${editId}`, {
+  const handleUpdate = async () => {
+    await fetch(`${API}/${editId}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
         Authorization: "Bearer " + token
       },
-      body: JSON.stringify({ title, language })
-    }).then(() => {
-      setEditId(null);
-      setTitle("");
-      setLanguage("");
-      fetchData();
-      fetchStats();
+      body: JSON.stringify({
+        title,
+        language: language.toLowerCase()   // 🔥 FIX
+      })
     });
+
+    setEditId(null);
+    setTitle("");
+    setLanguage("");
+    fetchData();
+    fetchStats();
   };
 
   // ================= FILE =================
   const handleUpload = async () => {
+    if (!file) return alert("Select file");
+
     const formData = new FormData();
     formData.append("file", file);
 
@@ -146,14 +153,15 @@ function MainApp() {
     });
 
     fetchData();
+    fetchStats();
   };
 
   const handleExport = async () => {
-    const response = await fetch(`${API}/export`, {
+    const res = await fetch(`${API}/export`, {
       headers: { Authorization: `Bearer ${token}` }
     });
 
-    const blob = await response.blob();
+    const blob = await res.blob();
     const url = window.URL.createObjectURL(blob);
 
     const a = document.createElement("a");
@@ -162,74 +170,74 @@ function MainApp() {
     a.click();
   };
 
-  // ================= CHART FIX =================
-  const chartData =
-    stats.total > 0
-      ? [
-          { name: "Total", value: stats.total },
-          { name: "English", value: stats.english }
-        ]
-      : [];
+  // ================= CHART =================
+  const chartData = [
+    { name: "Total", value: stats.total },
+    { name: "English", value: stats.english }
+  ];
 
   // ================= LOGIN UI =================
   if (!token) {
     return (
-      <div style={{ textAlign: "center", marginTop: "100px" }}>
+      <div className="center-box">
         <h2>🔐 Login</h2>
-        <input placeholder="Username" onChange={e => setUsername(e.target.value)} /><br /><br />
-        <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} /><br /><br />
+        <input placeholder="Username" onChange={e => setUsername(e.target.value)} />
+        <input type="password" placeholder="Password" onChange={e => setPassword(e.target.value)} />
         <button onClick={handleLogin}>Login</button>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: "20px", textAlign: "center" }}>
+    <div className="container">
 
       <h1>🌍 Multi-Language Engine</h1>
 
-      <button onClick={() => navigate("/dashboard")}>📊 Dashboard</button>
-      <button onClick={handleLogout}>Logout</button>
+      <div className="top-buttons">
+        <button onClick={() => navigate("/dashboard")}>📊 Dashboard</button>
+        <button onClick={handleLogout}>Logout</button>
+      </div>
 
-      {/* KPI */}
       <h3>Total: {stats.total}</h3>
       <h3>English: {stats.english}</h3>
 
-      {/* CHART FIXED */}
-      <div style={{ width: "100%", height: 300 }}>
-        {chartData.length === 0 ? (
-          <p>📊 Loading chart...</p>
-        ) : (
-          <ResponsiveContainer>
-            <BarChart data={chartData}>
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Bar dataKey="value" fill="#4F46E5" />
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      {/* CHART */}
+      <div className="chart-box">
+        <ResponsiveContainer width="100%" height={300}>
+          <BarChart data={chartData}>
+            <XAxis dataKey="name" />
+            <YAxis />
+            <Tooltip />
+            <Bar dataKey="value" fill="#4F46E5" />
+          </BarChart>
+        </ResponsiveContainer>
       </div>
 
       {/* FORM */}
-      <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
-      <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="Language" />
-
-      <button onClick={editId ? handleUpdate : handleAdd}>
-        {editId ? "Update" : "Add"}
-      </button>
+      <div className="form">
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Title" />
+        <input value={language} onChange={(e) => setLanguage(e.target.value)} placeholder="Language" />
+        <button onClick={editId ? handleUpdate : handleAdd}>
+          {editId ? "Update" : "Add"}
+        </button>
+      </div>
 
       {/* FILE */}
-      <input type="file" onChange={(e) => setFile(e.target.files[0])} />
-      <button onClick={handleUpload}>Upload</button>
-      <button onClick={handleExport}>Download CSV</button>
+      <div className="form">
+        <input type="file" onChange={(e) => setFile(e.target.files[0])} />
+        <button onClick={handleUpload}>Upload</button>
+        <button onClick={handleExport}>Download CSV</button>
+      </div>
 
       {/* DATA */}
       {data.map(item => (
-        <div key={item.id}>
-          {item.title} - {item.language}
-          <button onClick={() => handleEdit(item)}>Edit</button>
-          <button onClick={() => handleDelete(item.id)}>Delete</button>
+        <div key={item.id} className="list-item">
+          <span>{item.title} - {item.language}</span>
+
+          <div>
+            <button onClick={() => handleEdit(item)}>Edit</button>
+            <button onClick={() => handleDelete(item.id)}>Delete</button>
+          </div>
         </div>
       ))}
 
@@ -237,7 +245,6 @@ function MainApp() {
   );
 }
 
-// ================= ROUTER =================
 export default function App() {
   return (
     <Router>

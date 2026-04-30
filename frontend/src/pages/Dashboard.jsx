@@ -17,10 +17,11 @@ function Dashboard() {
     axios.get("http://localhost:8080/api/records/stats")
       .then(res => {
 
+        // Merge duplicate languages
         const merged = {};
 
         res.data.forEach(item => {
-          const lang = item.language.toLowerCase();
+          const lang = item.language.trim().toLowerCase();
 
           if (merged[lang]) {
             merged[lang] += item.count;
@@ -29,6 +30,7 @@ function Dashboard() {
           }
         });
 
+        // Convert to chart format
         const finalData = Object.keys(merged).map(key => ({
           language: key,
           count: merged[key]
@@ -40,14 +42,14 @@ function Dashboard() {
   }, []);
 
   return (
-    <div style={{ padding: "20px", textAlign: "center" }}>
+    <div className="container">
       <h2>📊 Language Distribution</h2>
 
-      <div style={{ width: "100%", marginTop: 30 }}>
+      <div className="chart-box">
         {data.length === 0 ? (
           <p>No data available</p>
         ) : (
-          <ResponsiveContainer width="100%" height={400}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={data}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="language" />
